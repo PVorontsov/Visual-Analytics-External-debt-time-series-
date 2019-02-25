@@ -1,6 +1,6 @@
 # CS 4331 Visual Analytics
 
-# Visualizing quarterly government debt statistics of different countries.
+# Visualizing quarterly government debt statistics of different countries
 
 Web application link:
 
