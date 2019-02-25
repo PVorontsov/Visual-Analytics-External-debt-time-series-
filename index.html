@@ -1,0 +1,830 @@
+<meta charset="utf-8">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <title>External debt Visualizations</title>
+</head>
+<style>
+    html {
+        height: 100%;
+    }
+    body, table {
+        font: 12px Arial;
+    }
+    h4 {
+        margin-top: 0px;
+        margin-bottom: 5px;
+    }
+    .inactive {
+        fill: #AAAAAA;
+    }
+    .active {
+        fill: orange;
+    }
+    .area.below {
+        /*fill: rgb(145,207,96);*/
+    }
+    .area.above {
+        fill: rgb(252,141,89);
+    }
+    .baseLine {
+        stroke: black;
+        stroke-width: 1.5;
+        fill: none;
+    }
+    .focus circle {
+        fill: white;
+        stroke: black;
+        stroke-width: 2px;
+    }
+
+    .chartHover {
+        fill: #FD0;
+    }
+    .axis path,
+    .axis line {
+        fill: none;
+        stroke: grey;
+        stroke-width: 1;
+        shape-rendering: crispEdges;
+    }
+    #debtCharts {
+        float:left;
+        width: 60%;
+        height: 95%;
+        margin: 0px 0px 0px 0.6%;
+        padding: 10px;
+        border-style: solid;
+        border-color: #AAA;
+        overflow-y: scroll;
+    }
+    #options {
+        float:right;
+        width: 35%;
+        height: 95%;
+        padding: 10px;
+    }
+    #countryOptions {
+        height: 250px;
+        width: 35%;
+        float: left;
+        border-style: solid;
+        border-color: #CCC;
+        overflow-y: scroll;
+        margin: 0px 5px 5px 0px;
+    }
+    #comparisonOptions {
+        float: left;
+        width: 50%;
+        margin: 0 auto;
+    }
+    #timeOptions {
+        float: left;
+        width: 50%;
+        margin-bottom: 7px;
+    }
+
+</style>
+
+<body>
+<!-- Where the debt visualization svgs go -->
+<div id="debtCharts">
+</div>
+
+<!-- All the options for the visualization (states, years, etc.) -->
+<div id="options">
+    <h1>External debt visualization</h1>
+    <h4>Countries shown:</h4>
+    <div id="countryOptions">
+        <!-- Country checkboxes -->
+        <input type="checkbox" id ="all" name="countrySelection" onClick=selectAll(this)> Select All<br>
+    </div>
+    <div id="timeOptions">
+        <h4>Time Period:</h4>
+        <table>
+            <tr>
+                <td>
+                    From: &ensp;
+                </td>
+                <td>
+                    <select id="fromMonth" class="timePeriodSelector">
+                        <option value="Jan">Jan</option>
+
+                        <option value="Apr">Apr</option>
+
+                        <option value="Jul">Jul</option>
+
+                        <option value="Oct">Oct</option>
+
+
+                    </select>
+                    <select id="fromYear" class="timePeriodSelector">
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td>To: &emsp;&ensp;</td>
+                <td>
+                    <select id="toMonth" class="timePeriodSelector">
+                        <option value="Jan">Jan</option>
+
+                        <option value="Apr">Apr</option>
+
+                        <option value="Jul">Jul</option>
+
+                        <option value="Oct">Oct</option>
+
+
+                    </select>
+                    <select id="toYear" class="timePeriodSelector">
+                    </select>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div id="comparisonOptions">
+        <h4>Compare to:</h4>
+        <input type="radio" name="comparison" id="noComparison" value="none" checked> No Comparison<br>
+        <input type="radio" name="comparison" id="countryComparison" value="country" display="inline"> Country:
+        <br>&emsp;&emsp;
+        <select id="countryComparisonOptions" name="countries" disabled>
+        </select>
+        <br>
+        <input type="radio" name="comparison" id="yearComparison" value="years"> Years:
+        <br>&emsp;&emsp;
+        <select id="year1" class="yearComparisonOptions" name="years" disabled>
+        </select>
+        &ensp;and&ensp;
+        <select id="year2" class="yearComparisonOptions" name="years" disabled>
+        </select>
+        <br>
+        <br>
+        <button id="updateCharts">Update Charts </button>
+    </div>
+    <div id="usMap">
+        <svg></svg>
+    </div>
+
+</div>
+
+<script type="text/javascript">
+
+    // Set up selection controls.
+    $(document.getElementsByName("comparison")).on("click", function() {
+        var _this = this;
+        if (_this.value == "country") {
+            $("#countryComparisonOptions").attr("disabled", false);
+            $(".yearComparisonOptions").attr("disabled", true);
+            $(".timePeriodSelector").attr("disabled", false);
+        } else if (_this.value == "years") {
+            $("#countryComparisonOptions").attr("disabled", true);
+            $(".yearComparisonOptions").attr("disabled", false);
+            $(".timePeriodSelector").attr("disabled", true);
+        } else {
+            $("#countryComparisonOptions").attr("disabled", true);
+            $(".yearComparisonOptions").attr("disabled", true);
+            $(".timePeriodSelector").attr("disabled", false);
+        }
+    });
+
+    function selectAll(_this) {
+        checkboxes = document.getElementsByName(_this.name);
+        for(var i=0, n=checkboxes.length;i<n;i++) {
+            if (checkboxes[i].checked != _this.checked) {
+                changeChartDisplay(checkboxes[i].id);
+            }
+        }
+    }
+
+    var fromYearSelection = d3.select("#fromYear");
+    var toYearSelection = d3.select("#toYear");
+    for (var i = 1998; i <= 2018; ++i) {
+        fromYearSelection.append("option")
+            .attr("value", i)
+            .text(i);
+        toYearSelection.append("option")
+            .attr("value", i)
+            .text(i);
+    }
+
+    var yearSelection1 = d3.select("#year1");
+    var yearSelection2 = d3.select("#year2");
+    for (var i = 1998; i <= 2017; ++i) {
+        yearSelection1.append("option")
+            .attr("value", i)
+            .text(i);
+        yearSelection2.append("option")
+            .attr("value", i)
+            .text(i);
+    }
+
+    document.getElementById("toYear").value = "2018";
+    document.getElementById("toMonth").value = "Oct";
+
+    //Width and height
+    var margin = {top: 30, right: 20, bottom: 30, left: 50};
+    var w = $("#debtCharts").width() * 0.95 - margin.left - margin.right;
+    var h = 150 - margin.bottom - margin.top;
+    var svgHeight = h + margin.top + margin.bottom;
+    var svgWidth = w + margin.left + margin.right;
+
+    // Date-parser.
+    var parseDate = d3.time.format("%b-%Y").parse;
+
+    // Set up scales.
+    var x = d3.time.scale().range([0, w]);
+    var y = d3.scale.linear().range([h, 0]);
+
+    // Define the axes.
+    var xAxis = d3.svg.axis().scale(x).orient("bottom").ticks(7).tickFormat(d3.time.format("%b '%y"));
+    var yAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
+
+    // Define the line.
+    var valueLine = d3.svg.line()
+        .x(function(d) {
+            return x(d.date);
+        })
+        .y(function(d) {
+            return y(d.debt);
+        });
+
+    var zeroLine = d3.svg.line()
+        .x(function(d) {
+            return x(d.date);
+        })
+        .y(y(0));
+
+    // Define the area.
+    var valueArea = d3.svg.area()
+        .x(function(d) {
+            return x(d.date);
+        })
+        .y1(function(d) {
+            return y(d.debt);
+        });
+
+    var zeroArea = d3.svg.area()
+        .x(function(d) {
+            return x(d.date);
+        })
+        .y0(y(0))
+        .y1(y(0));
+
+    var bisectDate = d3.bisector(function(d) { return d.date; }).left;
+
+
+    // Process the debt data and make the charts.
+    d3.csv("debt.csv", function(data) {
+        dataAllCountries = {};
+
+        // Process the date and rate of each datum, and add it to the corresponding country's array.
+        data.forEach(function(d) {
+            if (!dataAllCountries[d.country]) {
+                dataAllCountries[d.country] = [];
+            }
+            d.date = parseDate(d.month + "-" + d.year);
+            d.debt = +d.debt;
+            dataAllCountries[d.country].push(d);
+        });
+
+        // Sort each country's debt time series by date.
+        for (var country in dataAllCountries) {
+            dataAllCountries[country].sort(function(a,b) {
+                if (a.date < b.date) {
+                    return -1;
+                } else if (a.date > b.date) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            });
+        }
+
+        // Create an array of countries, each with a reference to all time series data.
+        var countryChartData = [];
+        for (var country in dataAllCountries) {
+            var d = {};
+            d.country = country;
+            d.series = dataAllCountries;
+            countryChartData.push(d);
+        }
+
+        // Populate the country selection and comparison lists.
+        var countryOptions = d3.select("#countryOptions");
+        var countryComparisons = d3.select("#countryComparisonOptions");
+
+        countryChartData.forEach(function(d) {
+            var option = countryOptions
+                .append("label")
+                .datum(d.country);
+            option.append("input")
+                .attr("type", "checkbox")
+                .property("checked", function(d) {
+                    return (d == "United States" || d == "National Average")
+                })
+                .attr("name", "countrySelection")
+                .attr("id", removeWhitespace)
+                .on("click", changeChartDisplay);
+            option.append("text")
+                .text(d.country);
+            option.append("br");
+            /*
+            if (d.country == "United States" || d.country == "National Average") {
+              option.select("input").attr("checked", true);
+            }
+            */
+            var comparison = countryComparisons.append("option")
+                .datum(d.country)
+                .attr("value", d.country)
+                .text(d.country);
+
+        });
+
+        // Scale the range of the data
+        x.domain(d3.extent(data, function(d) { return d.date; }));
+        y.domain([0, d3.max(data, function(d) { return d.debt; })]);
+
+        // Create the svgs for the charts.
+        svgCharts = d3.select("#debtCharts").selectAll("svg")
+            .data(countryChartData)
+            .enter()
+            .append("svg")
+            .style("display", "block")
+            .attr("id", function(d) { return removeWhitespace(d.country); })
+            .classed("chartActive", function(d) { return d.country == "National Average" || d.country == "United States"; })
+            .attr("width", svgWidth)
+            .attr("height", function(d) {
+                if (d.country == "National Average" || d.country == "United States") {
+                    return svgHeight;
+                } else {
+                    return 0;
+                }
+            })
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        var defs = svgCharts.append("defs");
+
+        // Add background.
+        svgCharts.append("rect")
+            .attr("transform", "translate(0,-" + margin.top + ")")
+            .attr("width", w)
+            .attr("height", h + margin.top + margin.bottom)
+            .attr("fill", "white");
+
+        // Side clip-path.
+        defs.append("clipPath")
+            .attr("id", "sideClip")
+            .append("rect")
+            .attr("transform", "translate(0,-" + margin.top + ")")
+            .attr("width", w)
+            .attr("height", h + margin.top);
+
+        // Add the baseline.
+        svgCharts.append("path")
+            .attr("clip-path", "url(#sideClip)")
+            .attr("class", "baseline")
+            .attr("d", function(d) {
+                return zeroLine(d.series[d.country]);
+            });
+
+        // Add the areas.
+        svgCharts.append("path")
+            .attr("clip-path", "url(#sideClip)")
+            .attr("class", "area below")
+            .attr("fill", "steelblue")
+            .attr("d", function(d) {
+                return zeroArea(d.series[d.country]);
+            });
+
+        svgCharts.append("path")
+            .attr("clip-path", "url(#sideClip)")
+            .attr("class", "area above")
+            .attr("d", function(d) {
+                return zeroArea(d.series[d.country]);
+            });
+
+        // Area gets drawn in updateCharts()
+
+        // Draw the axes.
+        svgCharts.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + h + ")");
+
+        svgCharts.append("g")
+            .attr("class", "y axis");
+
+        // Add y-axis label.
+        svgCharts.append("text")
+            .attr("text-anchor", "end")
+            .attr("y", 6)
+            .attr("dy", ".75em")
+            .attr("transform", "rotate(-90)")
+            .text("Debt (tn $)")
+
+        // Add focus circle and value.
+        var focus = svgCharts.append("g")
+            .attr("class", "focus")
+            .style("display", "none");
+
+        focus.append("circle")
+            .attr("r", 3.5);
+
+        focus.append("text")
+            .attr("x", 9)
+            .attr("y", -5)
+            .attr("dy", ".35em");
+
+        svgCharts.append("text")
+            .datum(function(d) { return d.country; })
+            .attr("x", w)
+            .attr("y", 0)
+            .attr("text-anchor", "end")
+            .style("font", "20px Arial")
+            .attr("fill", "#888")
+            .text(function(d) { return d; });
+
+
+
+        // Register mouse handlers.
+        svgCharts.on("mouseover", function(d) {
+            d3.select("#usMap").select("#" + removeWhitespace(d.country))
+                .classed("chartHover", true);
+            var focus = d3.select(this).select(".focus");
+            focus.style("display", null);
+        })
+            .on("mouseout", function(d) {
+                d3.select("#usMap").select("#" + removeWhitespace(d.country))
+                    .classed("chartHover", false);
+                var focus = d3.select(this).select(".focus");
+                focus.style("display", "none");
+            })
+            .on("mousemove", mousemove)
+            .on("dblclick", function(d) {
+                changeChartDisplay(d.country);
+            })
+
+
+
+        function mousemove(d) {
+            var x0 = x.invert(d3.mouse(this)[0]);
+            var i = bisectDate(d.series[d.country], x0, 1);
+            var d0 = d.series[d.country][i - 1];
+            var d1 = d.series[d.country][i];
+            if (x0 - d0.date > d1.date - x0) {
+                var d = d1;
+                x0 = d1.date;
+            } else {
+                var d = d0;
+                x0 = d0.date;
+            }
+            var d = x0 - d0.date > d1.date - x0 ? d1 : d0;
+            x0.setDate(1);
+            x0.setHours(0);
+            x0.setMinutes(0);
+            x0.setSeconds(0);
+            x0 = x(x0);
+            var lineElement = d3.select(this).select(".baseline").node();
+            var BBox = lineElement.getBBox();
+            var pathLength = lineElement.getTotalLength();
+            var scale = pathLength/BBox.width;
+
+            var beginning = x0, end = lineElement.getTotalLength();
+            while(true) {
+                var target = Math.floor((beginning + end) / 2);
+                var pos = lineElement.getPointAtLength(target);
+                if ((target === end || target === beginning ) && pos.x !== x0) {
+                    break;
+                }
+                if (pos.x > x0) {
+                    end = target;
+                } else if (pos.x < x0) {
+                    beginning = target;
+                } else {
+                    break;  // Position found.
+                }
+            }
+
+            var focus = d3.select(this).select(".focus");
+            if (x0 > w / 2) {
+                focus.select("text").attr("x", -9);
+                focus.select("text").attr("text-anchor", "end");
+            } else {
+                focus.select("text").attr("x", 9);
+                focus.select("text").attr("text-anchor", "start");
+            }
+            focus.attr("transform", "translate(" + x0 + "," + pos.y + ")");
+            focus.select("text").text((d.date.getMonth() + 1) + "/" + d.date.getFullYear() + ": " + d.debt );
+        }
+
+        updateCharts();
+
+        // Add an on-click for the update chart options button.
+        d3.select("#updateCharts")
+            .on("click", function(d) { updateCharts() });
+    });
+
+    function removeWhitespace(str) {
+        return str.replace(/\s+/g, '');
+    }
+
+    function changeChartDisplay(d) {
+        var id = d.replace(/\s+/g, '');
+        var countryChart = d3.select("#debtCharts")
+            .select("#" + id);
+
+        var countryMap = d3.select("#usMap").select("#" + id);
+
+        var countryCheckBox = d3.select("#countryOptions").select("#" + id);
+
+        var active = countryChart.classed("chartActive");
+
+        if (!active) {
+            countryCheckBox.property("checked", true);
+            countryChart.transition()
+                .attr("height", svgHeight)
+                .attr("opacity", 1);
+
+        } else {
+            countryCheckBox.property("checked", false);
+            countryChart.transition()
+                .attr("height", 0)
+                .attr("opacity", 0);
+        }
+        countryChart.classed("chartActive", !active);
+        countryMap.classed("active", !active);
+        countryMap.classed("inactive", active);
+    }
+
+    function updateChartNoComparison(d, fromDate, toDate) {
+        // Adjust the y scale.
+        var min;
+        this.each(function(d) {
+            min = d3.min(d.series[d.country],
+                function(a) {
+                    // Check if the date is outside the displayed range.
+                    var datumDate = parseDate(a.month + "-" + a.year);
+                    if (datumDate > toDate || datumDate < fromDate) {
+                        return 100;
+                    }
+                    return a.debt;
+                })
+            y.domain([min,
+                d3.max(d.series[d.country],
+                    function(a) {
+                        var datumDate = parseDate(a.month + "-" + a.year);
+                        if (datumDate > toDate || datumDate < fromDate) {
+                            return 0;
+                        }
+                        return a.debt;
+                    })]);
+        });
+
+        this.select(".area.below")
+            .attr("fill", "steelblue")
+            .attr("d", function(d) {
+                return valueArea.y0(y(min))(d.series[d.country]);
+            });
+
+        this.select(".area.above")
+            .attr("d", function(d) {
+                return zeroArea.y0(y(min))(d.series[d.country]);
+            });
+
+        this.select(".baseline")
+            .attr("d", function(d) {
+                return valueLine(d.series[d.country]);
+            });
+
+        this.select(".x.axis")
+            .call(xAxis.tickFormat(d3.time.format("%b '%y")));
+
+        this.select(".y.axis")
+            .call(yAxis);
+
+    }
+
+    function updateChartCountryComparison(d, fromDate, toDate) {
+        var comparedCountry = document.getElementById("countryComparisonOptions").value;
+
+        // Adjust the y scale.
+        this.each(function(d) {
+            y.domain([d3.min(d.series[d.country].concat(d.series[comparedCountry]),
+                function(a) {
+                    // Check if the date is outside the displayed range.
+                    var datumDate = parseDate(a.month + "-" + a.year);
+                    if (datumDate > toDate || datumDate < fromDate) {
+                        return 100;
+                    }
+                    return a.debt;
+                }),
+                d3.max(d.series[d.country].concat(d.series[comparedCountry]),
+                    function(a) {
+                        var datumDate = parseDate(a.month + "-" + a.year);
+                        if (datumDate > toDate || datumDate < fromDate) {
+                            return 0;
+                        }
+                        return a.debt;
+                    })]);
+        });
+
+        // Update areas.
+        this.select(".area.below")
+            .attr("fill", "rgb(145,207,96)")
+            .attr("d", function(d) {
+                var y0 = function(a,i) {
+                    return y(d3.min([d.series[comparedCountry][i].unemployment, d.series[d.country][i].debt]));
+                };
+                return valueArea.y0(y0)(d.series[d.country]);
+            });
+        this.select(".area.above")
+            .attr("d", function(d) {
+                var y0 = function(a,i) {
+                    return y(d3.max([d.series[comparedCountry][i].debt, d.series[d.country][i].debt]));
+                    //return y(d.series[comparedCountry][i].debt);
+                };
+                return valueArea.y0(y0)(d.series[d.country]);
+            });
+
+        this.select(".baseline")
+            .attr("d", function(d) {
+                return valueLine(d.series[d.country]);
+            });
+
+        this.select(".x.axis")
+            .call(xAxis.tickFormat(d3.time.format("%b '%y")));
+
+        this.select(".y.axis")
+            .call(yAxis);
+    }
+
+    function updateChartYearComparison(d, year1, year2) {
+        var fromDate1 = new Date(year1, 0, 01, 0, 0, 0, 0);
+        var toDate1 = new Date(year1, 11, 01, 0, 0, 0, 0);
+        var fromDate2 = new Date(year2, 0, 01, 0, 0, 0, 0);
+        var toDate2 = new Date(year2, 11, 01, 0, 0, 0, 0);
+
+        this.each(function(d) {
+            y.domain([d3.min(d.series[d.country],
+                function(a) {
+                    // Check if the date is outside the displayed range.
+                    var datumDate = parseDate(a.month + "-" + a.year);
+                    if (!((datumDate <= toDate1 && datumDate >= fromDate1) || (datumDate <= toDate2 && datumDate >= fromDate2))) {
+                        return 100;
+                    }
+                    return a.debt;
+                }),
+                d3.max(d.series[d.country],
+                    function(a) {
+                        var datumDate = parseDate(a.month + "-" + a.year);
+                        if (!((datumDate <= toDate1 && datumDate >= fromDate1) || (datumDate <= toDate2 && datumDate >= fromDate2))) {
+                            return 0;
+                        }
+                        return a.debt;
+                    })]);
+        });
+
+        x.domain([fromDate1, toDate1]);
+
+        // Offset to obtain compared year debt value.
+        var iteratorOffset = 12 * (year1 - year2);
+
+        // Update areas.
+        this.select(".area.below")
+            .attr("fill", "rgb(145,207,96)")
+            .attr("d", function(d) {
+                var y0 = function(a,i) {
+                    // If the new iterator is within range, use that value.
+                    if (!(i - iteratorOffset < 0 || i - iteratorOffset >= d.series[d.country].length)) {
+                        return y(d3.min([d.series[d.country][i - iteratorOffset].debt, d.series[d.country][i].debt]));
+                    } else {
+                        //return y(0);
+                        return y(d.series[d.country][i].debt);
+                    }
+                };
+                return valueArea.y0(y0)(d.series[d.country]);
+            });
+        this.select(".area.above")
+            .attr("d", function(d) {
+                var y0 = function(a,i) {
+                    // If the new iterator is within range, use that value.
+                    if (!(i - iteratorOffset < 0 || i - iteratorOffset >= d.series[d.country].length)) {
+                        return y(d3.max([d.series[d.country][i - iteratorOffset].debt, d.series[d.country][i].debt]));
+                    } else {
+                        return y(d.series[d.country][i].debt);
+                    }
+                };
+                return valueArea.y0(y0)(d.series[d.country]);
+            });
+
+        this.select(".baseline")
+            .attr("d", function(d) {
+                return valueLine(d.series[d.country]);
+            });
+
+        this.select(".x.axis")
+            .call(xAxis.tickFormat(d3.time.format("%b")));
+
+        this.select(".y.axis")
+            .call(yAxis);
+    }
+
+    function updateCharts() {
+        // Get chart settings.
+
+        // Get time interval and adjust scale.
+        var fromYear = document.getElementById("fromYear").value;
+        var fromMonth = document.getElementById("fromMonth").value;
+        var toYear = document.getElementById("toYear").value;
+        var toMonth = document.getElementById("toMonth").value;
+        var fromDate = parseDate(fromMonth + "-" + fromYear);
+        var toDate = parseDate(toMonth + "-" + toYear);
+        var year1 = document.getElementById("year1").value;
+        var year2 = document.getElementById("year2").value;
+        x.domain([fromDate, toDate]);
+
+        if (fromDate >= toDate) {
+            alert("Please select a valid time interval.\n" +
+                "\"From\" date cannot be after \"To\" date.");
+            return;
+        }
+
+        // Update the charts.
+        var activeCharts = d3.select("#debtCharts").selectAll(".chartActive");
+        var allCharts = d3.select("#debtCharts").selectAll("svg");
+        var inactiveCharts = allCharts.filter(function(obj) {
+            return !activeCharts[0].some(function(obj2) {
+                return removeWhitespace(obj.country) == obj2.id;
+            });
+        });
+
+        if (document.getElementById("noComparison").checked) {
+            // No comparison selected.
+            activeCharts[0].forEach(function(d, i, array) {
+                // If the chart is active, transition.  Otherwise, don't.
+                if (array[i].id == array[array.length - 1].id) {
+                    d3.select(d)
+                        .transition().duration(2000)
+                        .call(updateChartNoComparison, fromDate, toDate)
+                        .each("end", function(a) {
+                            inactiveCharts[0].forEach(function(d) {
+                                d = d3.select(d);
+                                d.call(updateChartNoComparison, fromDate, toDate);
+                            });
+                        });
+
+                } else {
+                    d3.select(d)
+                        .transition().duration(2000)
+                        .call(updateChartNoComparison, fromDate, toDate);
+                }
+            });
+        } else if (document.getElementById("countryComparison").checked) {
+            // Country comparisons selected.
+            activeCharts[0].forEach(function(d, i, array) {
+                // If the chart is active, transition.  Otherwise, don't.
+                if (array[i].id == array[array.length - 1].id) {
+                    d3.select(d)
+                        .transition().duration(2000)
+                        .call(updateChartCountryComparison, fromDate, toDate)
+                        .each("end", function(a) {
+                            inactiveCharts[0].forEach(function(d) {
+                                d = d3.select(d);
+                                d.call(updateChartCountryComparison, fromDate, toDate);
+                            });
+                        });
+
+                } else {
+                    d3.select(d)
+                        .transition().duration(2000)
+                        .call(updateChartCountryComparison, fromDate, toDate);
+                }
+            });
+        } else {
+            // Year comparisons selected.
+            activeCharts[0].forEach(function(d, i, array) {
+                // If the chart is active, transition.  Otherwise, don't.
+                if (array[i].id == array[array.length - 1].id) {
+                    d3.select(d)
+                        .transition().duration(2000)
+                        .call(updateChartYearComparison, year1, year2)
+                        .each("end", function(a) {
+                            inactiveCharts[0].forEach(function(d) {
+                                d = d3.select(d);
+                                d.call(updateChartYearComparison, year1, year2);
+                            });
+                        });
+
+                } else {
+                    d3.select(d)
+                        .transition().duration(2000)
+                        .call(updateChartYearComparison, year1, year2);
+                }
+            });
+        }
+
+
+    }
+
+</script>
+</body>
