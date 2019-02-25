@@ -2,6 +2,8 @@
 
 # Visualizing quarterly government debt statistics of different countries
 
+Intro video: https://youtu.be/cEHW1v6hwL0
+
 Web application link:
 
 https://pvorontsov.github.io/
