@@ -2,6 +2,8 @@
 
 # Visualizing quarterly external debt statistics of different countries.
 
+Web application link:
+
 https://pvorontsov.github.io/
 
 The data used for this project was found on the following websites: 
