@@ -1,4 +1,4 @@
-# CS 4331 Visual Analytics
+# CS 4331 Visual Analytics at Texas Tech University
 
 # Visualizing quarterly government debt statistics of different countries
 
